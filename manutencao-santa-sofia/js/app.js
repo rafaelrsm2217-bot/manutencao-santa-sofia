@@ -65,9 +65,12 @@ const TIPOS_MAQ=['Trator','Colheitadeira','Pulverizador autopropelido','Caminhã
 const TIPOS_IMPL=['Plantadeira / semeadeira','Pulverizador de arrasto','Grade / arado','Subsolador','Distribuidor de adubo / calcário','Roçadeira','Carreta / graneleira','Plataforma','Implemento','Outro'];
 const IMPL_ANTIGOS=['Plantadeira','Grade / Arado','Implemento'];
 const classeOf=m=>(m&&m.classe)||(m&&(IMPL_ANTIGOS.includes(m.tipo)||(TIPOS_IMPL.includes(m.tipo)&&!TIPOS_MAQ.includes(m.tipo)))?'implemento':'maquina');
-const CL={maquina:{plural:'Máquinas',sing:'Máquina',view:'frota',tipos:TIPOS_MAQ,novo:'Cadastrar máquina',horas:'Horímetro',ex:'ex.: Trator 01'},implemento:{plural:'Implementos',sing:'Implemento',view:'implementos',tipos:TIPOS_IMPL,novo:'Cadastrar implemento',horas:'Horas de uso',ex:'ex.: Plantadeira 12 linhas'}};
+const CL={maquina:{plural:'Máquinas',sing:'Máquina',view:'frota',tipos:TIPOS_MAQ,novo:'Cadastrar máquina',horas:'Horímetro',ex:'ex.: F-01'},implemento:{plural:'Implementos',sing:'Implemento',view:'implementos',tipos:TIPOS_IMPL,novo:'Cadastrar implemento',horas:'Horas de uso',ex:'ex.: F-30'}};
 const isImpl=m=>classeOf(m)==='implemento';
-function maqOptions(sel,grupo,vazio){const g=c=>{const l=S.maq.filter(m=>classeOf(m)===c).sort((a,b)=>a.nome.localeCompare(b.nome));return l.length?`<optgroup label="${CL[c].plural}">${l.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>${esc(m.nome)} · ${esc(m.tipo)}</option>`).join('')}</optgroup>`:''};return `<option value="">${vazio}</option>`+(grupo?g(grupo):g('maquina')+g('implemento'))}
+const nomeEq=m=>m?(m.nome||''):'';
+const cmpEq=(a,b)=>nomeEq(a).localeCompare(nomeEq(b),'pt-BR',{numeric:true});
+const frotaTag=m=>'';
+function maqOptions(sel,grupo,vazio){const g=c=>{const l=S.maq.filter(m=>classeOf(m)===c).sort((a,b)=>cmpEq(a,b));return l.length?`<optgroup label="${CL[c].plural}">${l.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>${esc(nomeEq(m))} · ${esc(m.tipo)}</option>`).join('')}</optgroup>`:''};return `<option value="">${vazio}</option>`+(grupo?g(grupo):g('maquina')+g('implemento'))}
 const SERVICOS=['Revisão preventiva','Troca de óleo e filtros','Lubrificação','Manutenção corretiva','Troca de peças'];
 const UNIDS=['un','L','kg','h'];
 const S={maq:[],rev:[],view:'painel',ficha:null,editRev:null,db:null,dl:null,loaded:{m:false,r:false},offline:false,prefMaq:null};
@@ -127,7 +130,7 @@ function exemploBanner(){
 }
 function excluirMaq(m,depois){
   const revs=S.rev.filter(r=>r.maquinaId===m.id);const C=CL[classeOf(m)];
-  confirmBox('Excluir '+m.nome+'?',`O cadastro e ${revs.length===1?'a revisão lançada':'as '+revs.length+' revisões lançadas'} serão apagados. Isso não pode ser desfeito.`,'Excluir',async()=>{try{for(const r of revs)await S.db.doc('revisoes/'+r.id).delete();await S.db.doc('maquinas/'+m.id).delete();toast(C.sing+' excluído(a)');if(depois)depois()}catch(e){dbErr(e)}});
+  confirmBox('Excluir '+nomeEq(m)+'?',`O cadastro e ${revs.length===1?'a revisão lançada':'as '+revs.length+' revisões lançadas'} serão apagados. Isso não pode ser desfeito.`,'Excluir',async()=>{try{for(const r of revs)await S.db.doc('revisoes/'+r.id).delete();await S.db.doc('maquinas/'+m.id).delete();toast(C.sing+' excluído(a)');if(depois)depois()}catch(e){dbErr(e)}});
 }
 function bindCommon(v){
   v.querySelectorAll('[data-edit-maq]').forEach(b=>b.onclick=()=>{const m=maqById(b.dataset.editMaq);if(!m)return;maqForm(m,classeOf(m));const sl=$('#maq-form-slot');if(sl)sl.scrollIntoView({behavior:'smooth',block:'start'})});
@@ -157,10 +160,10 @@ function vPainel(v){
     </div>
     <div class="spread"><h2>Próximas trocas</h2><span class="hint">Ordenado pelo que vence primeiro, com base no último horímetro informado.</span></div>
     <div class="panel tbl-wrap">${alertas.length?`<table><thead><tr><th>Equipamento</th><th>Item</th><th class="r">Última troca</th><th class="r">Próxima em</th><th class="r">Horímetro atual</th><th>Situação</th></tr></thead><tbody>
-      ${alertas.slice(0,40).map(({m,c})=>`<tr><td><button class="btn link" data-ficha="${m.id}">${esc(m.nome)}</button><div class="hint">${CL[classeOf(m)].sing}</div></td><td>${esc(c.nome)}<div class="hint">a cada ${hrs(c.intervalo)} h</div></td><td class="r mono">${hrs(c.ultima)} h</td><td class="r mono">${hrs(c.prox)} h</td><td class="r mono">${hrs(m.horimetroAtual)} h</td><td><span class="pill ${c.st}">${stLabel[c.st]}</span><div class="hint">${faltaTxt(c)}</div></td></tr>`).join('')}
+      ${alertas.slice(0,40).map(({m,c})=>`<tr><td><button class="btn link" data-ficha="${m.id}">${esc(nomeEq(m))}</button><div class="hint">${CL[classeOf(m)].sing}</div></td><td>${esc(c.nome)}<div class="hint">a cada ${hrs(c.intervalo)} h</div></td><td class="r mono">${hrs(c.ultima)} h</td><td class="r mono">${hrs(c.prox)} h</td><td class="r mono">${hrs(m.horimetroAtual)} h</td><td><span class="pill ${c.st}">${stLabel[c.st]}</span><div class="hint">${faltaTxt(c)}</div></td></tr>`).join('')}
     </tbody></table>`:`<div class="empty"><p>Nenhuma troca programada ainda. Ao lançar uma revisão, preencha "Próxima troca a cada (h)" em cada item para que o sistema avise quando vencer.</p></div>`}</div>
     <div class="spread"><h2>Últimas revisões</h2><button class="btn edit-only" id="go-lancar">Lançar revisão</button></div>
-    <div class="panel tbl-wrap">${ult.length?`<table><thead><tr><th>Data</th><th>Equipamento</th><th>Serviço</th><th class="r">Horímetro</th><th class="r">Valor</th><th class="r edit-only">Ações</th></tr></thead><tbody>${ult.map(r=>{const m=maqById(r.maquinaId);return `<tr><td class="mono">${fdate(r.data)}</td><td>${m?`<button class="btn link" data-ficha="${m.id}">${esc(m.nome)}</button>`:'<span class="muted">Máquina removida</span>'}</td><td>${esc(r.servico)}</td><td class="r mono">${m&&isImpl(m)?'—':hrs(r.horimetro)+' h'}</td><td class="r">${money(revTotal(r))}</td><td class="r edit-only" style="white-space:nowrap"><button class="btn sm edit-only" data-edit-rev="${r.id}">Editar</button> <button class="btn sm danger edit-only" data-del-rev="${r.id}">Excluir</button></td></tr>`}).join('')}</tbody></table>`:`<div class="empty"><p>Nenhuma revisão lançada.</p></div>`}</div>
+    <div class="panel tbl-wrap">${ult.length?`<table><thead><tr><th>Data</th><th>Equipamento</th><th>Serviço</th><th class="r">Horímetro</th><th class="r">Valor</th><th class="r edit-only">Ações</th></tr></thead><tbody>${ult.map(r=>{const m=maqById(r.maquinaId);return `<tr><td class="mono">${fdate(r.data)}</td><td>${m?`<button class="btn link" data-ficha="${m.id}">${esc(nomeEq(m))}</button>`:'<span class="muted">Máquina removida</span>'}</td><td>${esc(r.servico)}</td><td class="r mono">${m&&isImpl(m)?'—':hrs(r.horimetro)+' h'}</td><td class="r">${money(revTotal(r))}</td><td class="r edit-only" style="white-space:nowrap"><button class="btn sm edit-only" data-edit-rev="${r.id}">Editar</button> <button class="btn sm danger edit-only" data-del-rev="${r.id}">Excluir</button></td></tr>`}).join('')}</tbody></table>`:`<div class="empty"><p>Nenhuma revisão lançada.</p></div>`}</div>
   </div>`;
   $('#go-lancar').onclick=()=>{S.editRev=null;setTab('lancar')};
   bindRevActions(v);
@@ -169,7 +172,7 @@ function vPainel(v){
 
 function vFrota(v,cl){
   const C=CL[cl];const ord={bad:0,warn:1,ok:2,none:3};
-  const list=S.maq.filter(m=>classeOf(m)===cl).sort((a,b)=>ord[maqStatus(a)]-ord[maqStatus(b)]||a.nome.localeCompare(b.nome));
+  const list=S.maq.filter(m=>classeOf(m)===cl).sort((a,b)=>ord[maqStatus(a)]-ord[maqStatus(b)]||cmpEq(a,b));
   const gastoGrupo=S.rev.filter(r=>{const m=maqById(r.maquinaId);return m&&classeOf(m)===cl}).reduce((a,r)=>a+revTotal(r),0);
   v.innerHTML=`<div class="section">
     ${exemploBanner()}
@@ -177,7 +180,7 @@ function vFrota(v,cl){
     <div id="maq-form-slot"></div>
     ${list.length?`<div class="fleet">${list.map(m=>{if(cl==='implemento')return implCard(m);const st=maqStatus(m);const cs=componentes(m);const gasto=S.rev.filter(r=>r.maquinaId===m.id).reduce((a,r)=>a+revTotal(r),0);const prox=cs[0];return `<article class="card">
       <div class="spread"><span class="kind">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><span class="pill ${st}">${stLabel[st]}</span></div>
-      <div><h3>${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
+      <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
       <div class="spread">${meter(m.horimetroAtual)}<span class="hint">${C.horas}${m.horimetroData?' · lido em '+fdate(m.horimetroData):''}</span></div>
       <div class="meta">${prox?`Próxima: <b style="color:var(--ink)">${esc(prox.nome)}</b> em ${hrs(prox.prox)} h (${faltaTxt(prox)})`:'Sem trocas programadas'}<br>Total gasto: <b style="color:var(--ink)">${money(gasto)}</b></div>
       <div class="foot"><button class="btn sm edit-only" data-horas="${m.id}">Atualizar horas</button><button class="btn sm edit-only" data-nova-rev="${m.id}">Lançar revisão</button><button class="btn sm link" data-ficha="${m.id}">Ver ficha</button></div>
@@ -194,7 +197,7 @@ function implCard(m){
   const gasto=revs.reduce((a,r)=>a+revTotal(r),0);const u=revs[0];
   return `<article class="card">
     <div class="spread"><span class="kind">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><span class="pill none">${revs.length} ${revs.length===1?'revisão':'revisões'}</span></div>
-    <div><h3>${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
+    <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
     <div class="meta">Última revisão: <b style="color:var(--ink)">${u?fdate(u.data)+' · '+esc(u.servico):'nenhuma lançada'}</b>${u?`<br>Gasto na última: <b style="color:var(--ink)">${money(revTotal(u))}</b>`:''}<br>Total gasto: <b style="color:var(--ink)">${money(gasto)}</b></div>
     <div class="foot"><button class="btn sm edit-only" data-nova-rev="${m.id}">Lançar revisão</button><button class="btn sm link" data-ficha="${m.id}">Ver ficha</button></div>
       <div class="foot card-acts edit-only"><button class="btn sm edit-only" data-edit-maq="${m.id}">Editar</button><button class="btn sm danger edit-only" data-del-maq="${m.id}">Excluir</button></div>
@@ -208,10 +211,10 @@ function maqForm(m,cl){
   slot.innerHTML=`<form class="panel panel-pad" id="mf" style="display:flex;flex-direction:column;gap:14px">
     <h3>${m?'Editar cadastro':CL[cl].novo}</h3>
     <div class="form-grid">
-      <div class="field"><label for="mf-nome">Nome / apelido *</label><input id="mf-nome" required value="${esc(e.nome)}" placeholder="${CL[cl].ex}"></div>
-      <div class="field"><label for="mf-cl">Grupo</label><select id="mf-cl"><option value="maquina" ${cl==='maquina'?'selected':''}>Máquina</option><option value="implemento" ${cl==='implemento'?'selected':''}>Implemento</option></select></div>
-      <div class="field"><label for="mf-tipo">Tipo</label><select id="mf-tipo">${tipoOpts(cl,e.tipo)}</select></div>
-      <div class="field"><label for="mf-marca">Marca</label><input id="mf-marca" value="${esc(e.marca)}"></div>
+      <div class="field"><label for="mf-nome">Frota *</label><input id="mf-nome" required value="${esc(e.nome)}" placeholder="${CL[cl].ex}"></div>
+      <div class="field"><label for="mf-cl">Grupo *</label><select id="mf-cl" required><option value="maquina" ${cl==='maquina'?'selected':''}>Máquina</option><option value="implemento" ${cl==='implemento'?'selected':''}>Implemento</option></select></div>
+      <div class="field"><label for="mf-tipo">Tipo *</label><select id="mf-tipo" required>${tipoOpts(cl,e.tipo)}</select></div>
+      <div class="field"><label for="mf-marca">Marca *</label><input id="mf-marca" required value="${esc(e.marca)}"></div>
       <div class="field"><label for="mf-modelo">Modelo</label><input id="mf-modelo" value="${esc(e.modelo)}"></div>
       <div class="field"><label for="mf-ano">Ano</label><input id="mf-ano" inputmode="numeric" value="${esc(e.ano)}"></div>
       <div class="field"><label for="mf-id">Nº de série / chassi / placa</label><input id="mf-id" value="${esc(e.identificacao)}"></div>
@@ -226,7 +229,7 @@ function maqForm(m,cl){
   $('#mf').onsubmit=async ev=>{ev.preventDefault();
     const h=numIn($('#mf-h').value);const hv=($('#mf-cl').value==='implemento'||isNaN(h))?0:h;
     const data={nome:$('#mf-nome').value.trim(),classe:$('#mf-cl').value,tipo:$('#mf-tipo').value,marca:$('#mf-marca').value.trim(),modelo:$('#mf-modelo').value.trim(),ano:$('#mf-ano').value.trim(),identificacao:$('#mf-id').value.trim(),obs:$('#mf-obs').value.trim(),horimetroAtual:hv,horimetroData:m&&+m.horimetroAtual===hv?(m.horimetroData||today()):today(),exemplo:m?!!m.exemplo:false,criadoEm:m?.criadoEm||new Date().toISOString()};
-    if(!data.nome)return;
+    if(!data.nome||!data.marca||!data.tipo||!data.classe)return;
     const lbl=CL[data.classe].sing;
     try{ if(m) await S.db.doc('maquinas/'+m.id).set(data); else await S.db.collection('maquinas').add(data); toast(m?lbl+' atualizado(a)':lbl+' cadastrado(a)'); slot.innerHTML=''; render(); if(data.classe!==cl&&S.view!=='ficha')setTab(CL[data.classe].view)}catch(e){dbErr(e)}
   };
@@ -235,7 +238,7 @@ function maqForm(m,cl){
 function horasModal(id){
   const m=maqById(id);if(!m)return;
   const root=$('#modal-root');
-  root.innerHTML=`<div class="modal-bg"><form class="modal" id="hf"><h3>Atualizar horímetro</h3><div class="spread"><span>${esc(m.nome)}</span>${meter(m.horimetroAtual)}</div>
+  root.innerHTML=`<div class="modal-bg"><form class="modal" id="hf"><h3>Atualizar horímetro</h3><div class="spread"><span>${esc(nomeEq(m))}</span>${meter(m.horimetroAtual)}</div>
     <div class="field"><label for="hf-h">Nova leitura do horímetro (h)</label><input id="hf-h" inputmode="decimal" required value="${m.horimetroAtual??''}"></div>
     <div class="field"><label for="hf-d">Data da leitura</label><input id="hf-d" type="date" value="${today()}"></div>
     <p class="hint" id="hf-msg" style="margin:0"></p>
@@ -258,7 +261,7 @@ function vFicha(v){
   const span=hs.length>1?Math.max(...hs)-Math.min(...revs.map(r=>+r.horimetro||0).concat([Infinity])):0;
   v.innerHTML=`<div class="section">
     <div><button class="btn link" id="back" style="padding-left:0">← ${C.plural}</button></div>
-    <div class="spread"><div><span class="lbl" style="color:var(--accent)">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><h2>${esc(m.nome)}</h2><div class="muted">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · '))}${m.identificacao?' · '+esc(m.identificacao):''}</div></div>${impl?'':meter(m.horimetroAtual,true)}</div>
+    <div class="spread"><div><span class="lbl" style="color:var(--accent)">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><h2>${frotaTag(m)}${esc(m.nome)}</h2><div class="muted">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · '))}${m.identificacao?' · '+esc(m.identificacao):''}</div></div>${impl?'':meter(m.horimetroAtual,true)}</div>
     <div class="row"><button class="btn primary edit-only" data-nova-rev="${m.id}">Lançar revisão</button>${impl?'':`<button class="btn edit-only" data-horas="${m.id}">Atualizar horas</button>`}<button class="btn edit-only" id="edit-maq">Editar dados</button><button class="btn danger edit-only" id="del-maq">Excluir</button></div>
     <div id="maq-form-slot"></div>
     ${m.obs?`<div class="panel panel-pad"><span class="lbl">Observações</span><div style="white-space:pre-wrap">${esc(m.obs)}</div></div>`:''}
@@ -378,12 +381,12 @@ function vGastos(v){
     ${revs.length?`
     <h3>Por máquina e implemento</h3>
     <div class="panel tbl-wrap"><table><thead><tr><th>Equipamento</th><th>Grupo</th><th class="r">Revisões</th><th class="r">Horas entre revisões</th><th class="r">Custo por hora</th><th class="r">Total</th></tr></thead><tbody>
-      ${[...porMaq.entries()].sort((a,b)=>b[1].t-a[1].t).map(([id,o])=>{const m=maqById(id);const sp=Math.max(...o.hs)-Math.min(...o.hs);return `<tr><td>${m?`<button class="btn link" data-ficha="${id}">${esc(m.nome)}</button>`:'<span class="muted">Removido</span>'}</td><td>${m?CL[classeOf(m)].sing:'—'}</td><td class="r">${o.n}</td><td class="r">${sp>0?hrs(sp)+' h':'—'}</td><td class="r">${sp>0?money(o.t/sp):'—'}</td><td class="r"><b>${money(o.t)}</b></td></tr>`}).join('')}
+      ${[...porMaq.entries()].sort((a,b)=>b[1].t-a[1].t).map(([id,o])=>{const m=maqById(id);const sp=Math.max(...o.hs)-Math.min(...o.hs);return `<tr><td>${m?`<button class="btn link" data-ficha="${id}">${esc(nomeEq(m))}</button>`:'<span class="muted">Removido</span>'}</td><td>${m?CL[classeOf(m)].sing:'—'}</td><td class="r">${o.n}</td><td class="r">${sp>0?hrs(sp)+' h':'—'}</td><td class="r">${sp>0?money(o.t/sp):'—'}</td><td class="r"><b>${money(o.t)}</b></td></tr>`}).join('')}
     </tbody></table></div>
     <h3>Por tipo de item</h3>
     <div class="panel panel-pad bars">${cats.map(([c,t])=>`<div class="bar"><span>${esc(c)}</span><div class="track"><div class="fill" style="width:${maxC?Math.max(1,t/maxC*100):0}%"></div></div><b class="num">${money(t)}</b></div>`).join('')}</div>
     <h3>Revisões no período</h3>
-    <div class="panel">${revs.map(r=>{const m=maqById(r.maquinaId);return revDetails(r).replace('<span class="d">',`<span class="d"><span class="lbl" style="color:var(--accent)">${esc(m?m.nome:'Máquina removida')}</span><br>`)}).join('')}</div>
+    <div class="panel">${revs.map(r=>{const m=maqById(r.maquinaId);return revDetails(r).replace('<span class="d">',`<span class="d"><span class="lbl" style="color:var(--accent)">${esc(m?nomeEq(m):'Máquina removida')}</span><br>`)}).join('')}</div>
     `:`<div class="panel empty"><p>Nenhuma revisão neste período.</p></div>`}
   </div>`;
   $('#g-grupo').onchange=e=>{G.grupo=e.target.value;const m=maqById(G.maq);if(m&&G.grupo&&classeOf(m)!==G.grupo)G.maq='';render()};
@@ -392,7 +395,7 @@ function vGastos(v){
   $('#g-ate').onchange=e=>{G.ate=e.target.value;render()};
   if($('#csv'))$('#csv').onclick=async()=>{
     const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const n2=x=>String((+x||0).toFixed(2)).replace('.',',');
-    const lines=[['Data','Grupo','Equipamento','Tipo','Serviço','Horímetro','Oficina','Item','Descrição','Qtd','Unid.','Valor un.','Subtotal','Próxima troca a cada (h)','Próxima troca em (h)'].map(q).join(';')];
+    const lines=[['Data','Grupo','Frota','Tipo','Serviço','Horímetro','Oficina','Item','Descrição','Qtd','Unid.','Valor un.','Subtotal','Próxima troca a cada (h)','Próxima troca em (h)'].map(q).join(';')];
     for(const r of revs){const m=maqById(r.maquinaId);for(const it of (r.itens||[]))lines.push([fdate(r.data),m?CL[classeOf(m)].sing:'',m?.nome,m?.tipo,r.servico,r.horimetro,r.oficina,it.categoria,it.descricao,String(it.qtd).replace('.',','),it.unidade,n2(it.valor),n2(itemTotal(it)),it.intervalo||'',+it.intervalo>0?(+r.horimetro||0)+(+it.intervalo):''].map(q).join(';'))}
     try{await S.dl.save({filename:`manutencao_${G.de||'inicio'}_${G.ate||'hoje'}.csv`,data:'﻿'+lines.join('\r\n')})}catch(e){if(e&&e.code!=='cancelled')toast('Não foi possível gerar o arquivo.')}
   };
