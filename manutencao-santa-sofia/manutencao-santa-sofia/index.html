@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Manutenção - Faz. Santa Sofia</title>
+<meta name="theme-color" content="#8a613d">
+<link rel="icon" type="image/png" href="img/logo-s.png">
+<link rel="apple-touch-icon" href="img/logo-s.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<style>html,body{margin:0} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} [hidden]{display:none!important} img{max-width:100%}</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><div class="logo"><img src="img/logo-s.png" alt="Agropecuária Santa Sofia"></div><div class="brand-txt"><h1>Manutenção <span>- Faz. Santa Sofia</span></h1><small>Controle de revisões da frota agrícola</small></div><button class="mode-badge" id="modeBadge" type="button">Somente visualização · Editar</button></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-view="painel" aria-selected="true">Painel</button>
+      <button role="tab" data-view="frota" aria-selected="false">Máquinas</button>
+      <button role="tab" data-view="implementos" aria-selected="false">Implementos</button>
+      <button role="tab" class="edit-only" data-view="lancar" aria-selected="false">Lançar revisão</button>
+      <button role="tab" data-view="gastos" aria-selected="false">Gastos</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="view">
+  <div class="section"><div class="panel empty"><h3>Carregando registros</h3><p>Buscando os dados na planilha da fazenda.</p></div></div>
+</main>
+<footer class="wrap foot-bar">
+  <span id="status">Conectando...</span>
+  <div class="row">
+    <button class="btn sm" id="bk-exp" type="button">Exportar backup</button>
+    <button class="btn sm edit-only" id="bk-imp" type="button">Importar backup</button>
+    <input type="file" id="bk-file" accept=".json,application/json" hidden>
+  </div>
+</footer>
+<div id="modal-root"></div>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
