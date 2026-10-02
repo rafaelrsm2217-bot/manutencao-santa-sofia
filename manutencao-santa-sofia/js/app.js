@@ -53,6 +53,16 @@ const Store=(()=>{
     snapshot:()=>JSON.parse(JSON.stringify(state)),
     replaceAll:d=>alterar(s=>{const n=norm(d);s.maquinas=n.maquinas;s.revisoes=n.revisoes}),
     setPin:p=>{pin=p;try{p?sessionStorage.setItem('ss_manut_pin',p):sessionStorage.removeItem('ss_manut_pin')}catch(e){}},
+    enviarFoto:async(dataUrl,nome)=>{
+      if(!remote)return {url:dataUrl};
+      if(!pin)throw {code:'senha'};
+      const ref=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)).toLowerCase();
+      const m=/^data:(image\/[a-z]+);base64,(.*)$/.exec(dataUrl);if(!m)throw {code:'upload'};
+      await fetch(CFG.API_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'upload',senha:pin,ref,nome:nome||'',mime:m[1],data:m[2]})});
+      for(let i=0;i<8;i++){const d=await jsonp({action:'foto',ref});if(d&&d.id)return {id:d.id};await new Promise(r=>setTimeout(r,1500))}
+      throw {code:'upload'};
+    },
+    apagarFoto:f=>{if(!remote||!f||!f.id||!pin)return;fetch(CFG.API_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'apagar',senha:pin,id:f.id})}).catch(()=>{})},
     checkPin:async p=>{let ok;if(remote){const d=await jsonp({action:'check',senha:p});ok=!!(d&&d.ok)}else{ok=String(p)===String(CFG.SENHA_TESTE||'')}if(ok)Store.setPin(p);return ok},
     remote
   };
@@ -88,6 +98,18 @@ const itemTotal=it=>(+it.qtd||0)*(+it.valor||0);
 const revTotal=r=>(r.itens||[]).reduce((a,it)=>a+itemTotal(it),0);
 const maqById=id=>S.maq.find(m=>m.id===id);
 const meter=(h,big)=>{const n=Math.round(+h||0);const s=String(n).padStart(6,'0');let lead=0;while(lead<s.length-1&&s[lead]==='0')lead++;return `<span class="meter${big?' big':''}"><span class="dim">${s.slice(0,lead)}</span>${s.slice(lead)}<small>H</small></span>`};
+
+/* ---------- fotos ---------- */
+const fotoSrc=(f,w)=>!f?'':f.id?`https://drive.google.com/thumbnail?id=${encodeURIComponent(f.id)}&sz=w${w||800}`:(f.url||'');
+const fotoAlt=f=>f&&f.id?`https://lh3.googleusercontent.com/d/${encodeURIComponent(f.id)}=w1600`:'';
+const imgTag=(f,w,cls,alt)=>`<img class="${cls||''}" src="${esc(fotoSrc(f,w))}" alt="${esc(alt||'')}" loading="lazy" data-alt="${esc(fotoAlt(f))}" onerror="if(this.dataset.alt&&this.src!==this.dataset.alt){this.src=this.dataset.alt}else{this.classList.add('img-falhou')}">`;
+function reduzirImagem(file,max,q){return new Promise((res,rej)=>{const fr=new FileReader();fr.onerror=()=>rej({code:'arquivo'});fr.onload=()=>{const im=new Image();im.onerror=()=>rej({code:'arquivo'});im.onload=()=>{let w=im.naturalWidth,h=im.naturalHeight;const k=Math.min(1,max/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);res(c.toDataURL('image/jpeg',q))};im.src=fr.result};fr.readAsDataURL(file)})}
+function verFoto(f,titulo){
+  const root=$('#modal-root');
+  root.innerHTML=`<div class="modal-bg foto-bg" id="fv"><div class="foto-view">${imgTag(f,1600,'',titulo)}<div class="row" style="justify-content:space-between"><span class="hint" style="color:#fff">${esc(titulo||'')}</span><div class="row">${f.id?`<a class="btn sm" href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Abrir original</a>`:''}<button class="btn sm" id="fv-x">Fechar</button></div></div></div></div>`;
+  $('#fv').onclick=e=>{if(e.target.id==='fv'||e.target.id==='fv-x')root.innerHTML=''};
+}
+function bindFotos(v){v.querySelectorAll('[data-foto]').forEach(b=>b.onclick=ev=>{ev.preventDefault();const m=maqById(b.dataset.foto);if(!m)return;const i=b.dataset.idx;const f=i==null?m.foto:(m.anexos||[])[+i];if(f)verFoto(f,i==null?nomeEq(m):(f.nome||nomeEq(m)))})}
 
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
 function confirmBox(title,text,okLabel,onOk){
@@ -130,7 +152,7 @@ function exemploBanner(){
 }
 function excluirMaq(m,depois){
   const revs=S.rev.filter(r=>r.maquinaId===m.id);const C=CL[classeOf(m)];
-  confirmBox('Excluir '+nomeEq(m)+'?',`O cadastro e ${revs.length===1?'a revisão lançada':'as '+revs.length+' revisões lançadas'} serão apagados. Isso não pode ser desfeito.`,'Excluir',async()=>{try{for(const r of revs)await S.db.doc('revisoes/'+r.id).delete();await S.db.doc('maquinas/'+m.id).delete();toast(C.sing+' excluído(a)');if(depois)depois()}catch(e){dbErr(e)}});
+  confirmBox('Excluir '+nomeEq(m)+'?',`O cadastro e ${revs.length===1?'a revisão lançada':'as '+revs.length+' revisões lançadas'} serão apagados. Isso não pode ser desfeito.`,'Excluir',async()=>{try{for(const r of revs)await S.db.doc('revisoes/'+r.id).delete();await S.db.doc('maquinas/'+m.id).delete();[m.foto,...(m.anexos||[])].forEach(f=>Store.apagarFoto(f));toast(C.sing+' excluído(a)');if(depois)depois()}catch(e){dbErr(e)}});
 }
 function bindCommon(v){
   v.querySelectorAll('[data-edit-maq]').forEach(b=>b.onclick=()=>{const m=maqById(b.dataset.editMaq);if(!m)return;maqForm(m,classeOf(m));const sl=$('#maq-form-slot');if(sl)sl.scrollIntoView({behavior:'smooth',block:'start'})});
@@ -179,6 +201,7 @@ function vFrota(v,cl){
     <div class="spread"><div><h2>${C.plural}</h2><span class="hint">${list.length} cadastrad${cl==='maquina'?'as':'os'} · ${money(gastoGrupo)} em revisões no total</span></div><button class="btn primary edit-only" id="add-maq">${C.novo}</button></div>
     <div id="maq-form-slot"></div>
     ${list.length?`<div class="fleet">${list.map(m=>{if(cl==='implemento')return implCard(m);const st=maqStatus(m);const cs=componentes(m);const gasto=S.rev.filter(r=>r.maquinaId===m.id).reduce((a,r)=>a+revTotal(r),0);const prox=cs[0];return `<article class="card">
+      ${cardFoto(m)}
       <div class="spread"><span class="kind">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><span class="pill ${st}">${stLabel[st]}</span></div>
       <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
       <div class="spread">${meter(m.horimetroAtual)}<span class="hint">${C.horas}${m.horimetroData?' · lido em '+fdate(m.horimetroData):''}</span></div>
@@ -188,14 +211,17 @@ function vFrota(v,cl){
     </article>`}).join('')}</div>`:`<div class="panel empty"><h3>${cl==='maquina'?'Nenhuma máquina cadastrada':'Nenhum implemento cadastrado'}</h3><p>${cl==='maquina'?'Cadastre tratores, colheitadeiras, pulverizadores autopropelidos e caminhões com o horímetro atual.':'Cadastre plantadeiras, grades, pulverizadores de arrasto, distribuidores e demais implementos. Para cada um você registra as revisões, a data e quanto foi gasto.'}</p><button class="btn primary edit-only" id="add-maq-2">${C.novo}</button></div>`}
   </div>`;
   $('#add-maq').onclick=()=>maqForm(null,cl);
+  bindFotos(v);
   if($('#add-maq-2'))$('#add-maq-2').onclick=()=>maqForm(null,cl);
   bindCommon(v);
 }
 
+function cardFoto(m){return m.foto?`<button type="button" class="card-foto" data-foto="${m.id}" aria-label="Ver foto de ${esc(nomeEq(m))}">${imgTag(m.foto,600,'',nomeEq(m))}</button>`:''}
 function implCard(m){
   const revs=S.rev.filter(r=>r.maquinaId===m.id).sort((a,b)=>String(b.data).localeCompare(a.data));
   const gasto=revs.reduce((a,r)=>a+revTotal(r),0);const u=revs[0];
   return `<article class="card">
+    ${cardFoto(m)}
     <div class="spread"><span class="kind">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><span class="pill none">${revs.length} ${revs.length===1?'revisão':'revisões'}</span></div>
     <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
     <div class="meta">Última revisão: <b style="color:var(--ink)">${u?fdate(u.data)+' · '+esc(u.servico):'nenhuma lançada'}</b>${u?`<br>Gasto na última: <b style="color:var(--ink)">${money(revTotal(u))}</b>`:''}<br>Total gasto: <b style="color:var(--ink)">${money(gasto)}</b></div>
@@ -220,18 +246,50 @@ function maqForm(m,cl){
       <div class="field"><label for="mf-id">Nº de série / chassi / placa</label><input id="mf-id" value="${esc(e.identificacao)}"></div>
       <div class="field" id="mf-hw" ${cl==='implemento'?'hidden':''}><label for="mf-h">Horímetro atual (h)</label><input id="mf-h" inputmode="decimal" value="${e.horimetroAtual??''}" placeholder="0"></div>
     </div>
+    <div class="field"><label>Foto do equipamento</label>
+      <div class="foto-box"><div class="foto-prev" id="mf-fprev"></div>
+      <div class="row"><label class="btn sm" for="mf-foto" id="mf-flbl">Escolher foto</label><input type="file" id="mf-foto" accept="image/*" hidden><button type="button" class="btn sm danger" id="mf-frm" hidden>Remover foto</button></div></div></div>
     <div class="field"><label for="mf-obs">Observações</label><textarea id="mf-obs" placeholder="Óleo recomendado, capacidade, fornecedor de peças, trator que puxa...">${esc(e.obs)}</textarea></div>
-    <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="mf-cancel">Cancelar</button><button class="btn primary" type="submit">${m?'Salvar alterações':'Cadastrar'}</button></div>
+    <div class="field"><label>Imagens das observações <span class="hint">(etiqueta de óleo, tabela de manutenção, manual, nota...)</span></label>
+      <div class="anexos" id="mf-anx"></div>
+      <div class="row"><label class="btn sm" for="mf-anxin">Adicionar imagens</label><input type="file" id="mf-anxin" accept="image/*" multiple hidden></div></div>
+    <p class="hint" id="mf-msg" style="margin:0"></p>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="mf-cancel">Cancelar</button><button class="btn primary" type="submit" id="mf-ok">${m?'Salvar alterações':'Cadastrar'}</button></div>
   </form>`;
   $('#mf-nome').focus();
   $('#mf-cl').onchange=ev=>{const c=ev.target.value;$('#mf-tipo').innerHTML=tipoOpts(c,'');$('#mf-hw').hidden=c==='implemento';$('#mf-nome').placeholder=CL[c].ex};
+  // fotos: guardadas como {id} (Drive), {url} (modo de teste) ou {novo:dataUrl} (ainda não enviada)
+  let foto=e.foto?{...e.foto}:null;const fotoOrig=e.foto||null;
+  let anexos=(e.anexos||[]).map(a=>({...a}));const anexosOrig=e.anexos||[];
+  const MAXW=Store.remote?1600:800, Q=Store.remote?.82:.7;
+  const prevSrc=f=>f.novo||fotoSrc(f,400);
+  const desenhaFoto=()=>{$('#mf-fprev').innerHTML=foto?`<img src="${esc(prevSrc(foto))}" alt="Foto do equipamento">`:'<span class="hint">Nenhuma foto</span>';$('#mf-frm').hidden=!foto;$('#mf-flbl').textContent=foto?'Trocar foto':'Escolher foto'};
+  const desenhaAnx=()=>{$('#mf-anx').innerHTML=anexos.length?anexos.map((a,i)=>`<div class="anx"><img src="${esc(prevSrc(a))}" alt="${esc(a.nome||'Imagem')}"><button type="button" class="x" data-rm="${i}" title="Remover imagem" aria-label="Remover imagem">×</button></div>`).join(''):'<span class="hint">Nenhuma imagem anexada</span>';$('#mf-anx').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{anexos.splice(+b.dataset.rm,1);desenhaAnx()})};
+  desenhaFoto();desenhaAnx();
+  $('#mf-foto').onchange=async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;try{foto={novo:await reduzirImagem(f,MAXW,Q),nome:f.name};desenhaFoto()}catch(er){toast('Não foi possível ler essa imagem.')}};
+  $('#mf-frm').onclick=()=>{foto=null;desenhaFoto()};
+  $('#mf-anxin').onchange=async ev=>{const fs=[...ev.target.files];ev.target.value='';for(const f of fs){try{anexos.push({novo:await reduzirImagem(f,MAXW,Q),nome:f.name})}catch(er){toast('Não foi possível ler '+f.name)}}desenhaAnx()};
+  const enviar=async(f,msg)=>{if(!f||!f.novo)return f;$('#mf-msg').textContent=msg;const r=await Store.enviarFoto(f.novo,f.nome);return {...r,nome:f.nome||''}};
   $('#mf-cancel').onclick=()=>slot.innerHTML='';
   $('#mf').onsubmit=async ev=>{ev.preventDefault();
+    if(!$('#mf-nome').value.trim()||!$('#mf-marca').value.trim())return;
+    const okBtn=$('#mf-ok');okBtn.disabled=true;
+    let fotoFinal,anexosFinal;
+    try{
+      const tot=(foto&&foto.novo?1:0)+anexos.filter(a=>a.novo).length;let n=0;
+      const msg=f=>f&&f.novo?`Enviando imagem ${++n} de ${tot}... aguarde`:'';
+      fotoFinal=await enviar(foto,msg(foto));
+      anexosFinal=[];for(const a of anexos)anexosFinal.push(await enviar(a,msg(a)));
+      $('#mf-msg').textContent='';
+    }catch(er){okBtn.disabled=false;$('#mf-msg').textContent='';toast(er&&er.code==='senha'?'Entre no modo de edição para enviar fotos.':'Não foi possível enviar as imagens. Verifique a internet e se o Apps Script foi atualizado.');return}
+    okBtn.disabled=false;
     const h=numIn($('#mf-h').value);const hv=($('#mf-cl').value==='implemento'||isNaN(h))?0:h;
-    const data={nome:$('#mf-nome').value.trim(),classe:$('#mf-cl').value,tipo:$('#mf-tipo').value,marca:$('#mf-marca').value.trim(),modelo:$('#mf-modelo').value.trim(),ano:$('#mf-ano').value.trim(),identificacao:$('#mf-id').value.trim(),obs:$('#mf-obs').value.trim(),horimetroAtual:hv,horimetroData:m&&+m.horimetroAtual===hv?(m.horimetroData||today()):today(),exemplo:m?!!m.exemplo:false,criadoEm:m?.criadoEm||new Date().toISOString()};
+    const data={nome:$('#mf-nome').value.trim(),classe:$('#mf-cl').value,tipo:$('#mf-tipo').value,marca:$('#mf-marca').value.trim(),modelo:$('#mf-modelo').value.trim(),ano:$('#mf-ano').value.trim(),identificacao:$('#mf-id').value.trim(),obs:$('#mf-obs').value.trim(),foto:fotoFinal||null,anexos:anexosFinal||[],horimetroAtual:hv,horimetroData:m&&+m.horimetroAtual===hv?(m.horimetroData||today()):today(),exemplo:m?!!m.exemplo:false,criadoEm:m?.criadoEm||new Date().toISOString()};
     if(!data.nome||!data.marca||!data.tipo||!data.classe)return;
     const lbl=CL[data.classe].sing;
-    try{ if(m) await S.db.doc('maquinas/'+m.id).set(data); else await S.db.collection('maquinas').add(data); toast(m?lbl+' atualizado(a)':lbl+' cadastrado(a)'); slot.innerHTML=''; render(); if(data.classe!==cl&&S.view!=='ficha')setTab(CL[data.classe].view)}catch(e){dbErr(e)}
+    try{ if(m) await S.db.doc('maquinas/'+m.id).set(data); else await S.db.collection('maquinas').add(data);
+      const ficam=new Set([fotoFinal,...anexosFinal].filter(f=>f&&f.id).map(f=>f.id));[fotoOrig,...anexosOrig].forEach(f=>{if(f&&f.id&&!ficam.has(f.id))Store.apagarFoto(f)});
+      toast(m?lbl+' atualizado(a)':lbl+' cadastrado(a)'); slot.innerHTML=''; render(); if(data.classe!==cl&&S.view!=='ficha')setTab(CL[data.classe].view)}catch(e){dbErr(e)}
   };
 }
 
@@ -264,7 +322,8 @@ function vFicha(v){
     <div class="spread"><div><span class="lbl" style="color:var(--accent)">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><h2>${frotaTag(m)}${esc(m.nome)}</h2><div class="muted">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · '))}${m.identificacao?' · '+esc(m.identificacao):''}</div></div>${impl?'':meter(m.horimetroAtual,true)}</div>
     <div class="row"><button class="btn primary edit-only" data-nova-rev="${m.id}">Lançar revisão</button>${impl?'':`<button class="btn edit-only" data-horas="${m.id}">Atualizar horas</button>`}<button class="btn edit-only" id="edit-maq">Editar dados</button><button class="btn danger edit-only" id="del-maq">Excluir</button></div>
     <div id="maq-form-slot"></div>
-    ${m.obs?`<div class="panel panel-pad"><span class="lbl">Observações</span><div style="white-space:pre-wrap">${esc(m.obs)}</div></div>`:''}
+    ${m.foto?`<button type="button" class="ficha-foto" data-foto="${m.id}" aria-label="Ampliar foto">${imgTag(m.foto,1000,'',nomeEq(m))}</button>`:''}
+    ${m.obs||(m.anexos||[]).length?`<div class="panel panel-pad" style="display:flex;flex-direction:column;gap:10px"><span class="lbl">Observações</span>${m.obs?`<div style="white-space:pre-wrap">${esc(m.obs)}</div>`:''}${(m.anexos||[]).length?`<div class="anexos">${m.anexos.map((a,i)=>`<button type="button" class="anx" data-foto="${m.id}" data-idx="${i}" title="${esc(a.nome||'Ver imagem')}">${imgTag(a,400,'',a.nome||'Imagem anexada')}</button>`).join('')}</div>`:''}</div>`:''}
     <div class="stats">
       <div class="stat"><span class="lbl">Revisões</span><b>${revs.length}</b></div>
       <div class="stat"><span class="lbl">Total gasto</span><b>${money(total)}</b></div>
@@ -279,6 +338,7 @@ function vFicha(v){
   $('#back').onclick=()=>setTab(C.view);
   $('#edit-maq').onclick=()=>maqForm(m,classeOf(m));
   $('#del-maq').onclick=()=>excluirMaq(m,()=>setTab(C.view));
+  bindFotos(v);
   bindRevActions(v);bindCommon(v);
 }
 function revDetails(r){
