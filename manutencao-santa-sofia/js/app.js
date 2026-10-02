@@ -80,6 +80,7 @@ const isImpl=m=>classeOf(m)==='implemento';
 const nomeEq=m=>m?(m.nome||''):'';
 const cmpEq=(a,b)=>nomeEq(a).localeCompare(nomeEq(b),'pt-BR',{numeric:true});
 const frotaTag=m=>'';
+const temOp=m=>m&&classeOf(m)==='maquina'&&m.tipo==='Trator'&&m.operador;
 function maqOptions(sel,grupo,vazio){const g=c=>{const l=S.maq.filter(m=>classeOf(m)===c).sort((a,b)=>cmpEq(a,b));return l.length?`<optgroup label="${CL[c].plural}">${l.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>${esc(nomeEq(m))} · ${esc(m.tipo)}</option>`).join('')}</optgroup>`:''};return `<option value="">${vazio}</option>`+(grupo?g(grupo):g('maquina')+g('implemento'))}
 const SERVICOS=['Revisão preventiva','Troca de óleo e filtros','Lubrificação','Manutenção corretiva','Troca de peças'];
 const UNIDS=['un','L','kg','h'];
@@ -203,7 +204,7 @@ function vFrota(v,cl){
     ${list.length?`<div class="fleet">${list.map(m=>{if(cl==='implemento')return implCard(m);const st=maqStatus(m);const cs=componentes(m);const gasto=S.rev.filter(r=>r.maquinaId===m.id).reduce((a,r)=>a+revTotal(r),0);const prox=cs[0];return `<article class="card">
       ${cardFoto(m)}
       <div class="spread"><span class="kind">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><span class="pill ${st}">${stLabel[st]}</span></div>
-      <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div></div>
+      <div><h3>${frotaTag(m)}${esc(m.nome)}</h3><div class="meta">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · ')||'Sem modelo informado')}${m.identificacao?` · ${esc(m.identificacao)}`:''}</div>${temOp(m)?`<div class="meta">Operador: <b style="color:var(--ink)">${esc(m.operador)}</b></div>`:''}</div>
       <div class="spread">${meter(m.horimetroAtual)}<span class="hint">${C.horas}${m.horimetroData?' · lido em '+fdate(m.horimetroData):''}</span></div>
       <div class="meta">${prox?`Próxima: <b style="color:var(--ink)">${esc(prox.nome)}</b> em ${hrs(prox.prox)} h (${faltaTxt(prox)})`:'Sem trocas programadas'}<br>Total gasto: <b style="color:var(--ink)">${money(gasto)}</b></div>
       <div class="foot"><button class="btn sm edit-only" data-horas="${m.id}">Atualizar horas</button><button class="btn sm edit-only" data-nova-rev="${m.id}">Lançar revisão</button><button class="btn sm link" data-ficha="${m.id}">Ver ficha</button></div>
@@ -244,6 +245,7 @@ function maqForm(m,cl){
       <div class="field"><label for="mf-modelo">Modelo</label><input id="mf-modelo" value="${esc(e.modelo)}"></div>
       <div class="field"><label for="mf-ano">Ano</label><input id="mf-ano" inputmode="numeric" value="${esc(e.ano)}"></div>
       <div class="field"><label for="mf-id">Nº de série / chassi / placa</label><input id="mf-id" value="${esc(e.identificacao)}"></div>
+      <div class="field" id="mf-opw" ${cl==='maquina'&&(e.tipo||'Trator')==='Trator'?'':'hidden'}><label for="mf-op">Operador</label><input id="mf-op" value="${esc(e.operador)}" placeholder="Nome do operador"></div>
       <div class="field" id="mf-hw" ${cl==='implemento'?'hidden':''}><label for="mf-h">Horímetro atual (h)</label><input id="mf-h" inputmode="decimal" value="${e.horimetroAtual??''}" placeholder="0"></div>
     </div>
     <div class="field"><label>Foto do equipamento</label>
@@ -257,7 +259,9 @@ function maqForm(m,cl){
     <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="mf-cancel">Cancelar</button><button class="btn primary" type="submit" id="mf-ok">${m?'Salvar alterações':'Cadastrar'}</button></div>
   </form>`;
   $('#mf-nome').focus();
-  $('#mf-cl').onchange=ev=>{const c=ev.target.value;$('#mf-tipo').innerHTML=tipoOpts(c,'');$('#mf-hw').hidden=c==='implemento';$('#mf-nome').placeholder=CL[c].ex};
+  const opVis=()=>{$('#mf-opw').hidden=!($('#mf-cl').value==='maquina'&&$('#mf-tipo').value==='Trator')};
+  $('#mf-cl').onchange=ev=>{const c=ev.target.value;$('#mf-tipo').innerHTML=tipoOpts(c,'');$('#mf-hw').hidden=c==='implemento';$('#mf-nome').placeholder=CL[c].ex;opVis()};
+  $('#mf-tipo').onchange=opVis;
   // fotos: guardadas como {id} (Drive), {url} (modo de teste) ou {novo:dataUrl} (ainda não enviada)
   let foto=e.foto?{...e.foto}:null;const fotoOrig=e.foto||null;
   let anexos=(e.anexos||[]).map(a=>({...a}));const anexosOrig=e.anexos||[];
@@ -284,7 +288,7 @@ function maqForm(m,cl){
     }catch(er){okBtn.disabled=false;$('#mf-msg').textContent='';toast(er&&er.code==='senha'?'Entre no modo de edição para enviar fotos.':'Não foi possível enviar as imagens. Verifique a internet e se o Apps Script foi atualizado.');return}
     okBtn.disabled=false;
     const h=numIn($('#mf-h').value);const hv=($('#mf-cl').value==='implemento'||isNaN(h))?0:h;
-    const data={nome:$('#mf-nome').value.trim(),classe:$('#mf-cl').value,tipo:$('#mf-tipo').value,marca:$('#mf-marca').value.trim(),modelo:$('#mf-modelo').value.trim(),ano:$('#mf-ano').value.trim(),identificacao:$('#mf-id').value.trim(),obs:$('#mf-obs').value.trim(),foto:fotoFinal||null,anexos:anexosFinal||[],horimetroAtual:hv,horimetroData:m&&+m.horimetroAtual===hv?(m.horimetroData||today()):today(),exemplo:m?!!m.exemplo:false,criadoEm:m?.criadoEm||new Date().toISOString()};
+    const data={nome:$('#mf-nome').value.trim(),classe:$('#mf-cl').value,tipo:$('#mf-tipo').value,marca:$('#mf-marca').value.trim(),modelo:$('#mf-modelo').value.trim(),ano:$('#mf-ano').value.trim(),identificacao:$('#mf-id').value.trim(),operador:($('#mf-cl').value==='maquina'&&$('#mf-tipo').value==='Trator')?$('#mf-op').value.trim():'',obs:$('#mf-obs').value.trim(),foto:fotoFinal||null,anexos:anexosFinal||[],horimetroAtual:hv,horimetroData:m&&+m.horimetroAtual===hv?(m.horimetroData||today()):today(),exemplo:m?!!m.exemplo:false,criadoEm:m?.criadoEm||new Date().toISOString()};
     if(!data.nome||!data.marca||!data.tipo||!data.classe)return;
     const lbl=CL[data.classe].sing;
     try{ if(m) await S.db.doc('maquinas/'+m.id).set(data); else await S.db.collection('maquinas').add(data);
@@ -319,7 +323,7 @@ function vFicha(v){
   const span=hs.length>1?Math.max(...hs)-Math.min(...revs.map(r=>+r.horimetro||0).concat([Infinity])):0;
   v.innerHTML=`<div class="section">
     <div><button class="btn link" id="back" style="padding-left:0">← ${C.plural}</button></div>
-    <div class="spread"><div><span class="lbl" style="color:var(--accent)">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><h2>${frotaTag(m)}${esc(m.nome)}</h2><div class="muted">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · '))}${m.identificacao?' · '+esc(m.identificacao):''}</div></div>${impl?'':meter(m.horimetroAtual,true)}</div>
+    <div class="spread"><div><span class="lbl" style="color:var(--accent)">${esc(m.tipo)}${m.exemplo?' · exemplo':''}</span><h2>${frotaTag(m)}${esc(m.nome)}</h2><div class="muted">${esc([m.marca,m.modelo,m.ano].filter(Boolean).join(' · '))}${m.identificacao?' · '+esc(m.identificacao):''}</div>${temOp(m)?`<div style="margin-top:4px">Operador: <b>${esc(m.operador)}</b></div>`:''}</div>${impl?'':meter(m.horimetroAtual,true)}</div>
     <div class="row"><button class="btn primary edit-only" data-nova-rev="${m.id}">Lançar revisão</button>${impl?'':`<button class="btn edit-only" data-horas="${m.id}">Atualizar horas</button>`}<button class="btn edit-only" id="edit-maq">Editar dados</button><button class="btn danger edit-only" id="del-maq">Excluir</button></div>
     <div id="maq-form-slot"></div>
     ${m.foto?`<button type="button" class="ficha-foto" data-foto="${m.id}" aria-label="Ampliar foto">${imgTag(m.foto,1000,'',nomeEq(m))}</button>`:''}
